@@ -1,12 +1,12 @@
 import os
 import asyncio
+
 import threading
 import streamlit as st
 from langchain.chains import ConversationChain
 from langchain.chat_models import ChatOpenAI
 from langchain.agents import Tool, initialize_agent
 from langchain.utilities import PythonREPL
-
 
 class ChatApp:
     """Streamlit chat application using LangChain."""
@@ -29,6 +29,7 @@ class ChatApp:
         if "agentic_mode" not in st.session_state:
             st.session_state["agentic_mode"] = False
 
+
     def _setup_sidebar(self) -> None:
         with st.sidebar:
             st.title("KiSo - Chat")
@@ -43,7 +44,9 @@ class ChatApp:
             max_tokens = st.number_input("Max tokens", min_value=1, max_value=4096, value=250)
             top_p = st.slider("Top P", 0.0, 1.0, 1.0, 0.05)
 
+
             st.session_state["agentic_mode"] = st.checkbox("Agentic Mode", value=st.session_state["agentic_mode"])
+
 
             if st.button("New Chat :page_facing_up:"):
                 st.session_state["chats"][chat_id] = []
@@ -71,9 +74,11 @@ class ChatApp:
             )
             self.chain = ConversationChain(llm=self.llm, verbose=False)
             self._setup_agent()
+
         except Exception as exc:
             st.error(f"Failed to initialize model: {exc}")
             self.llm = None
+
 
     def _setup_agent(self) -> None:
         """Initialize a simple agent with Python REPL capabilities."""
@@ -99,6 +104,7 @@ class ChatApp:
         for message in messages:
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
+
 
     def _start_agent_task(self, task: str) -> None:
         """Run agent task in a background thread."""
@@ -142,6 +148,7 @@ class ChatApp:
         messages = st.session_state["chats"].setdefault(chat_id, [])
 
         self._display_messages()
+
 
         if st.session_state.get("agentic_mode"):
             self._display_agentic()
