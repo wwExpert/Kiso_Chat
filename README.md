@@ -1,2 +1,17 @@
 # Kiso_Chat
-A Python project to create a chat app with OpenAI API and Streamlit.
+
+A Streamlit chat application powered by OpenAI's APIs and LangChain.
+
+## Features
+
+- Secure handling of the API key via environment variables
+- Asynchronous processing support
+- Configurable model parameters (temperature, max tokens, top p)
+- Multiple chat sessions using a chat ID
+- Streaming of assistant responses
+
+Run the app with:
+
+```bash
+streamlit run kiso_chatgpt.py
+```
