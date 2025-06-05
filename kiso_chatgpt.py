@@ -3,10 +3,16 @@ import asyncio
 import threading
 import streamlit as st
 from langchain.chains import ConversationChain
-from langchain.chat_models import ChatOpenAI
+try:  # Prefer new package locations
+    from langchain_openai import ChatOpenAI
+except Exception:  # pragma: no cover - fallback for older installations
+    from langchain.chat_models import ChatOpenAI
 from langchain.agents import Tool, initialize_agent
-
-try:  # LangChain < 0.1.0
+except Exception:
+    try:  # pragma: no cover - fallback for newer versions
+        from langchain.tools.python.tool import PythonREPLTool as PythonREPL
+    except Exception:
+        from langchain_experimental.utilities import PythonREPL
     from langchain.utilities import PythonREPL
 except Exception:  # pragma: no cover - fallback for newer versions
     from langchain.tools.python.tool import PythonREPLTool as PythonREPL
