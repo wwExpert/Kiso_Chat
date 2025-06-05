@@ -1,12 +1,21 @@
 import os
 import asyncio
-
 import threading
 import streamlit as st
 from langchain.chains import ConversationChain
-from langchain.chat_models import ChatOpenAI
+try:  # Prefer new package locations
+    from langchain_openai import ChatOpenAI
+except Exception:  # pragma: no cover - fallback for older installations
+    from langchain.chat_models import ChatOpenAI
 from langchain.agents import Tool, initialize_agent
-from langchain.utilities import PythonREPL
+except Exception:
+    try:  # pragma: no cover - fallback for newer versions
+        from langchain.tools.python.tool import PythonREPLTool as PythonREPL
+    except Exception:
+        from langchain_experimental.utilities import PythonREPL
+    from langchain.utilities import PythonREPL
+except Exception:  # pragma: no cover - fallback for newer versions
+    from langchain.tools.python.tool import PythonREPLTool as PythonREPL
 
 class ChatApp:
     """Streamlit chat application using LangChain."""
@@ -44,9 +53,7 @@ class ChatApp:
             max_tokens = st.number_input("Max tokens", min_value=1, max_value=4096, value=250)
             top_p = st.slider("Top P", 0.0, 1.0, 1.0, 0.05)
 
-
             st.session_state["agentic_mode"] = st.checkbox("Agentic Mode", value=st.session_state["agentic_mode"])
-
 
             if st.button("New Chat :page_facing_up:"):
                 st.session_state["chats"][chat_id] = []
@@ -79,7 +86,6 @@ class ChatApp:
             st.error(f"Failed to initialize model: {exc}")
             self.llm = None
 
-
     def _setup_agent(self) -> None:
         """Initialize a simple agent with Python REPL capabilities."""
         try:
@@ -104,7 +110,6 @@ class ChatApp:
         for message in messages:
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
-
 
     def _start_agent_task(self, task: str) -> None:
         """Run agent task in a background thread."""
@@ -148,7 +153,6 @@ class ChatApp:
         messages = st.session_state["chats"].setdefault(chat_id, [])
 
         self._display_messages()
-
 
         if st.session_state.get("agentic_mode"):
             self._display_agentic()
