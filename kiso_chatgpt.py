@@ -5,11 +5,11 @@ import streamlit as st
 from langchain.chains import ConversationChain
 from langchain.chat_models import ChatOpenAI
 from langchain.agents import Tool, initialize_agent
+
 try:  # LangChain < 0.1.0
     from langchain.utilities import PythonREPL
 except Exception:  # pragma: no cover - fallback for newer versions
     from langchain.tools.python.tool import PythonREPLTool as PythonREPL
-
 
 class ChatApp:
     """Streamlit chat application using LangChain."""
@@ -31,6 +31,7 @@ class ChatApp:
             st.session_state["agent_running"] = False
         if "agentic_mode" not in st.session_state:
             st.session_state["agentic_mode"] = False
+
 
     def _setup_sidebar(self) -> None:
         with st.sidebar:
@@ -74,6 +75,7 @@ class ChatApp:
             )
             self.chain = ConversationChain(llm=self.llm, verbose=False)
             self._setup_agent()
+
         except Exception as exc:
             st.error(f"Failed to initialize model: {exc}")
             self.llm = None
