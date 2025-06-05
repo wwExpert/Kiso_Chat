@@ -1,21 +1,26 @@
+# kiso_chatgpt.py (korrigiert)
+
 import os
-import asyncio
 import threading
 import streamlit as st
-from langchain.chains import ConversationChain
-try:  # Prefer new package locations
+
+# KORREKTUR: Import-Anweisungen bereinigt und korrigiert.
+# Die verschachtelten und fehlerhaften try-except-Blöcke wurden entfernt.
+try:
     from langchain_openai import ChatOpenAI
-except Exception:  # pragma: no cover - fallback for older installations
+except ImportError:
     from langchain.chat_models import ChatOpenAI
+
+try:
+    # Dies ist der moderne Pfad für das Python REPL Tool
+    from langchain_experimental.tools import PythonREPLTool
+except ImportError:
+    # Fallback für ältere Versionen
+    from langchain.tools import PythonREPLTool
+
 from langchain.agents import Tool, initialize_agent
-except Exception:
-    try:  # pragma: no cover - fallback for newer versions
-        from langchain.tools.python.tool import PythonREPLTool as PythonREPL
-    except Exception:
-        from langchain_experimental.utilities import PythonREPL
-    from langchain.utilities import PythonREPL
-except Exception:  # pragma: no cover - fallback for newer versions
-    from langchain.tools.python.tool import PythonREPLTool as PythonREPL
+from langchain_core.messages import HumanMessage, AIMessage
+
 
 class ChatApp:
     """Streamlit chat application using LangChain."""
@@ -24,7 +29,7 @@ class ChatApp:
         self._init_session()
         self.params = {}
         self._setup_sidebar()
-        self._setup_chain()
+        self._setup_llm_and_agent()
 
     def _init_session(self) -> None:
         if "chats" not in st.session_state:
@@ -37,7 +42,6 @@ class ChatApp:
             st.session_state["agent_running"] = False
         if "agentic_mode" not in st.session_state:
             st.session_state["agentic_mode"] = False
-
 
     def _setup_sidebar(self) -> None:
         with st.sidebar:
@@ -56,7 +60,11 @@ class ChatApp:
             st.session_state["agentic_mode"] = st.checkbox("Agentic Mode", value=st.session_state["agentic_mode"])
 
             if st.button("New Chat :page_facing_up:"):
+                # KORREKTUR: Sicherstellen, dass die neue Chat-ID auch im State landet, bevor sie benutzt wird
                 st.session_state["chats"][chat_id] = []
+                st.session_state["current_chat"] = chat_id
+                st.rerun() # Neu laden, um den neuen leeren Chat anzuzeigen
+            
             st.session_state["current_chat"] = chat_id
 
             self.params.update(
@@ -66,7 +74,9 @@ class ChatApp:
                 top_p=top_p,
             )
 
-    def _setup_chain(self) -> None:
+    # KORREKTUR: Die Methode wurde umbenannt, da sie nicht nur die Chain, sondern LLM und Agent einrichtet.
+    # Die fehlerhafte und redundante ConversationChain wurde entfernt.
+    def _setup_llm_and_agent(self) -> None:
         if "OPENAI_API_KEY" not in os.environ or not os.environ["OPENAI_API_KEY"]:
             st.warning("API key missing. Enter your OpenAI API key in the sidebar.")
             self.llm = None
@@ -79,7 +89,8 @@ class ChatApp:
                 max_tokens=self.params["max_tokens"],
                 top_p=self.params["top_p"],
             )
-            self.chain = ConversationChain(llm=self.llm, verbose=False)
+            # HINWEIS: Die ConversationChain wurde entfernt, da sie nicht korrekt genutzt wurde.
+            # Der Chat-Verlauf wird jetzt direkt aus dem st.session_state an das LLM übergeben.
             self._setup_agent()
 
         except Exception as exc:
@@ -88,22 +99,31 @@ class ChatApp:
 
     def _setup_agent(self) -> None:
         """Initialize a simple agent with Python REPL capabilities."""
+        # HINWEIS: initialize_agent ist veraltet. Für zukünftige Versionen sollte dies
+        # durch modernere Agenten-APIs wie `create_react_agent` ersetzt werden.
         try:
-            repl = PythonREPL()
-            tool = Tool(name="python", func=repl.run, description="Execute Python code")
+            tool = Tool(name="python_repl", func=PythonREPLTool().run, description="Execute Python code")
             self.agent = initialize_agent([tool], self.llm, agent="zero-shot-react-description", verbose=False)
         except Exception as exc:
             st.error(f"Failed to initialize agent: {exc}")
             self.agent = None
 
-    def _stream_response(self, prompt: str):
-        for chunk in self.llm.stream(prompt):
+    # KORREKTUR: Die Streaming-Funktion akzeptiert jetzt den gesamten Nachrichtenverlauf,
+    # um dem Chat ein "Gedächtnis" zu geben.
+    def _stream_response(self, messages: list):
+        langchain_messages = []
+        for msg in messages:
+            if msg["role"] == "user":
+                langchain_messages.append(HumanMessage(content=msg["content"]))
+            elif msg["role"] == "assistant":
+                langchain_messages.append(AIMessage(content=msg["content"]))
+
+        for chunk in self.llm.stream(langchain_messages):
             text = chunk.content
             if text:
                 yield text
-
-    async def _async_response(self, prompt: str) -> str:
-        return await self.chain.apredict(input=prompt)
+    
+    # KORREKTUR: Die nicht genutzte async-Methode wurde entfernt.
 
     def _display_messages(self) -> None:
         messages = st.session_state["chats"].setdefault(st.session_state["current_chat"], [])
@@ -113,11 +133,11 @@ class ChatApp:
 
     def _start_agent_task(self, task: str) -> None:
         """Run agent task in a background thread."""
-
         def run() -> None:
             try:
+                # HINWEIS: agent.run() ist ebenfalls veraltet.
                 result = self.agent.run(task)
-            except Exception as exc:  # pragma: no cover - interactive
+            except Exception as exc:
                 result = f"Agent failed: {exc}"
             st.session_state["agent_result"] = result
             st.session_state["agent_running"] = False
@@ -159,16 +179,13 @@ class ChatApp:
 
         prompt = st.chat_input("Ask your question!")
         if prompt:
-            with st.chat_message("user"):
-                st.write(prompt)
             messages.append({"role": "user", "content": prompt})
+            with st.chat_message("user"):
+                st.markdown(prompt)
 
             with st.chat_message("assistant"):
-                try:
-                    response = st.write_stream(self._stream_response(prompt))
-                except Exception:
-                    response = asyncio.run(self._async_response(prompt))
-                    st.write(response)
+                # KORREKTUR: Der gesamte Nachrichtenverlauf wird an die Streaming-Funktion übergeben.
+                response = st.write_stream(self._stream_response(messages))
 
             messages.append({"role": "assistant", "content": response})
 
