@@ -1,5 +1,4 @@
 import os
-import threading
 import streamlit as st
 
 # KORREKTUR: Import-Anweisungen für Klarheit und Kompatibilität überarbeitet.
@@ -53,8 +52,6 @@ class ChatApp:
             st.session_state["current_chat"] = "default"
         if "agent_result" not in st.session_state:
             st.session_state["agent_result"] = None
-        if "agent_running" not in st.session_state:
-            st.session_state["agent_running"] = False
         if "agentic_mode" not in st.session_state:
             st.session_state["agentic_mode"] = False
         if "llm_initialized_with_key" not in st.session_state: # Hinzugefügt für bessere Logik
@@ -249,22 +246,16 @@ class ChatApp:
     def _start_agent_task(self, task: str) -> None:
         if not self.agent:
             st.error("Agent ist nicht initialisiert. Agentic Mode nicht möglich.")
-            st.session_state["agent_running"] = False
             return
 
-        def run_agent_logic() -> None:
+        st.session_state["agent_result"] = None  # Ergebnis zurücksetzen
+        with st.spinner("Agent is working..."):
             try:
-                result = self.agent.run(task) # .run() ist für initialize_agent noch gebräuchlich
+                result = self.agent.run(task)
             except Exception as exc:
                 result = f"Agent failed: {exc}"
-            st.session_state["agent_result"] = result
-            st.session_state["agent_running"] = False
-            st.rerun() # UI aktualisieren, um Ergebnis und Button-Status zu ändern
 
-        st.session_state["agent_running"] = True
-        st.session_state["agent_result"] = None # Ergebnis zurücksetzen
-        threading.Thread(target=run_agent_logic, daemon=True).start()
-        st.rerun() # UI sofort aktualisieren, um "Agent is working..." anzuzeigen
+        st.session_state["agent_result"] = result
 
 
     def _display_agentic(self) -> None:
@@ -275,12 +266,9 @@ class ChatApp:
                 st.warning("Agent nicht konfiguriert. Bitte API Key prüfen.")
             return # Wenn PythonREPLTool None ist, wurde die spezifische Warnung bereits ausgegeben.
 
-        if st.session_state.get("agent_running", False):
-            st.info("Agent is working...")
-        else:
-            task = st.text_input("Agent Task", key="agent_task_input")
-            if st.button("Run Agent", key="run_agent_button") and task:
-                self._start_agent_task(task)
+        task = st.text_input("Agent Task", key="agent_task_input")
+        if st.button("Run Agent", key="run_agent_button") and task:
+            self._start_agent_task(task)
 
         if st.session_state.get("agent_result") is not None:
             st.success(f"Agent Result: {st.session_state['agent_result']}")
