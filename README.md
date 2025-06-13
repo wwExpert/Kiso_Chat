@@ -10,6 +10,7 @@ A Streamlit chat application powered by OpenAI's APIs and LangChain.
 - Multiple chat sessions using a chat ID.
 - Streaming of assistant responses.
 - Agentic mode for autonomous background tasks.
+- Summarize chats into bullet points with a single click.
 
 ## Setup and Installation
 
@@ -34,3 +35,4 @@ Run the app with:
 
 ```bash
 streamlit run kiso_chatgpt.py
+```
