@@ -231,6 +231,23 @@ class ChatApp:
             yield f"Ein Fehler ist beim Streamen der Antwort aufgetreten: {e}"
 
 
+    def _summarize_chat(self, messages: list) -> str:
+        """Summarize the given chat history using the current LLM."""
+        if not self.llm:
+            return "LLM ist nicht initialisiert."
+
+        conversation = "\n".join(f"{m['role']}: {m['content']}" for m in messages)
+        summary_prompt = (
+            "Fasse die folgende Konversation stichpunktartig in f\xC3\xBCnf Punkten zusammen:\n"
+            f"{conversation}"
+        )
+        try:
+            result = self.llm.invoke([HumanMessage(content=summary_prompt)])
+            return result.content.strip()
+        except Exception as exc:
+            return f"Fehler bei der Zusammenfassung: {exc}"
+
+
     def _display_messages(self) -> None:
         current_chat_id = st.session_state.get("current_chat", "default")
         # Sicherstellen, dass der Chat-Eintrag existiert
@@ -288,6 +305,14 @@ class ChatApp:
         messages = st.session_state["chats"][current_chat_id]
 
         self._display_messages()
+
+        if st.button("Chat zusammenfassen", key="summarize_button") and messages:
+            st.session_state["chat_summary"] = self._summarize_chat(messages)
+            st.rerun()
+
+        if summary := st.session_state.get("chat_summary"):
+            with st.expander("Chat Zusammenfassung"):
+                st.markdown(summary)
 
         if st.session_state.get("agentic_mode", False):
             if self.llm and self.agent: # Agentic UI nur anzeigen, wenn LLM und Agent bereit sind
