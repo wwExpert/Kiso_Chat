@@ -27,6 +27,8 @@ except ImportError:
 from langchain.agents import Tool, initialize_agent # initialize_agent ist veraltet, aber vorerst beibehalten
 from langchain_core.messages import HumanMessage, AIMessage
 
+from mco import apply_mco
+
 
 class ChatApp:
     """Streamlit chat application using LangChain."""
@@ -58,6 +60,8 @@ class ChatApp:
             st.session_state["llm_initialized_with_key"] = False
         if "openai_api_key_value" not in st.session_state: # Für Persistenz des API-Key Feldes
             st.session_state["openai_api_key_value"] = os.environ.get("OPENAI_API_KEY", "")
+        if "mco_enabled" not in st.session_state:
+            st.session_state["mco_enabled"] = False
 
 
     def _setup_sidebar(self) -> None:
@@ -98,6 +102,11 @@ class ChatApp:
             top_p = st.slider("Top P", 0.0, 1.0, 1.0, 0.05, key="top_p_slider")
 
             st.session_state["agentic_mode"] = st.checkbox("Agentic Mode", value=st.session_state.get("agentic_mode", False), key="agentic_mode_checkbox")
+            st.session_state["mco_enabled"] = st.checkbox(
+                "Enable MCO (optimize messages)",
+                value=st.session_state.get("mco_enabled", False),
+                key="mco_enabled_checkbox",
+            )
 
             if st.button("New Chat :page_facing_up:", key="new_chat_button"):
                 st.session_state["chats"][chat_id_input] = []
@@ -324,9 +333,15 @@ class ChatApp:
         if self.llm and st.session_state.get("llm_initialized_with_key", False):
             prompt = st.chat_input("Ask your question!", key=f"chat_input_{current_chat_id}")
             if prompt:
-                messages.append({"role": "user", "content": prompt})
+                optimized_prompt = prompt
+                if st.session_state.get("mco_enabled"):
+                    optimized_prompt = apply_mco(self.llm, prompt)
+
+                messages.append({"role": "user", "content": optimized_prompt})
                 with st.chat_message("user"):
-                    st.markdown(prompt)
+                    st.markdown(optimized_prompt)
+                    if optimized_prompt != prompt:
+                        st.caption(f"Optimized from: {prompt}")
 
                 with st.chat_message("assistant"):
                     full_response_content = []
