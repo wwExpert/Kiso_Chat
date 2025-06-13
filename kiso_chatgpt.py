@@ -1,5 +1,6 @@
 import os
 import streamlit as st
+import logging
 
 # KORREKTUR: Import-Anweisungen für Klarheit und Kompatibilität überarbeitet.
 
@@ -24,6 +25,13 @@ except ImportError:
     PythonREPLTool = None
 
 
+# Logging setup
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger(__name__)
+
 from langchain.agents import Tool, initialize_agent # initialize_agent ist veraltet, aber vorerst beibehalten
 from langchain_core.messages import HumanMessage, AIMessage
 
@@ -32,8 +40,10 @@ class ChatApp:
     """Streamlit chat application using LangChain."""
 
     def __init__(self) -> None:
+        self.logger = logging.getLogger(self.__class__.__name__)
+        self._log("Initializing ChatApp")
         self._init_session()
-        self.params = {} # Wird in _setup_sidebar mit den ersten Widget-Werten gefüllt
+        self.params = {}  # Wird in _setup_sidebar mit den ersten Widget-Werten gefüllt
         self._setup_sidebar()
         # LLM und Agent werden initialisiert, wenn ein API-Key vorhanden ist.
         # _setup_sidebar ruft _setup_llm_and_agent auf, wenn Parameter initial gesetzt werden und Key vorhanden ist.
@@ -43,9 +53,15 @@ class ChatApp:
         if not hasattr(self, 'llm') and os.environ.get("OPENAI_API_KEY"): # Sicherstellen, dass initial geladen wird, falls Key in Env
              self._setup_llm_and_agent()
 
+    def _log(self, message: str, level: int = logging.DEBUG) -> None:
+        """Helper to store and output debug messages."""
+        logger.log(level, message)
+        st.session_state.setdefault("debug_logs", []).append(message)
+
 
     def _init_session(self) -> None:
         # Initialisiert den Session State für Streamlit
+        self._log("Initializing session state")
         if "chats" not in st.session_state:
             st.session_state["chats"] = {"default": []}
         if "current_chat" not in st.session_state:
@@ -58,10 +74,12 @@ class ChatApp:
             st.session_state["llm_initialized_with_key"] = False
         if "openai_api_key_value" not in st.session_state: # Für Persistenz des API-Key Feldes
             st.session_state["openai_api_key_value"] = os.environ.get("OPENAI_API_KEY", "")
+        self._log("Session state initialized")
 
 
     def _setup_sidebar(self) -> None:
         # Erstellt die Sidebar für Einstellungen
+        self._log("Setting up sidebar")
         with st.sidebar:
             st.title("KiSo - Chat")
             # API-Key Eingabe
@@ -76,11 +94,13 @@ class ChatApp:
                 st.session_state["openai_api_key_value"] = api_key
                 if api_key:
                     os.environ["OPENAI_API_KEY"] = api_key
+                    self._log("API key updated")
                     st.session_state["llm_initialized_with_key"] = False # Erfordert Neuinitialisierung
                     # Rufen _setup_llm_and_agent nicht direkt hier auf, sondern lassen es von der Parameter-Logik unten handhaben
                 else: # API Key wurde gelöscht
                     if "OPENAI_API_KEY" in os.environ:
                         del os.environ["OPENAI_API_KEY"]
+                    self._log("API key removed")
                     self.llm = None
                     self.agent = None
                     st.session_state["llm_initialized_with_key"] = False
@@ -103,12 +123,14 @@ class ChatApp:
                 st.session_state["chats"][chat_id_input] = []
                 st.session_state["current_chat"] = chat_id_input
                 st.session_state["agent_result"] = None
+                self._log(f"New chat created: {chat_id_input}")
                 st.rerun()
 
             if chat_id_input != current_chat_id_val: # current_chat_id_val ist der Wert *vor* diesem Rerun
                 st.session_state["current_chat"] = chat_id_input
                 if chat_id_input not in st.session_state["chats"]:
                     st.session_state["chats"][chat_id_input] = []
+                self._log(f"Switched to chat: {chat_id_input}")
                 st.rerun()
 
             new_params = {
@@ -126,6 +148,7 @@ class ChatApp:
             )
 
             if should_reinitialize_llm:
+                self._log("Model parameters changed, reinitializing LLM")
                 self.params.update(new_params) # self.params wird hier mit den neuesten Werten aktualisiert
                 if os.environ.get("OPENAI_API_KEY"):
                     self._setup_llm_and_agent() # Ruft die Initialisierung mit den aktualisierten self.params auf
@@ -140,6 +163,7 @@ class ChatApp:
         # 3. Modellparameter im Sidebar geändert werden und ein API-Key vorhanden ist.
         # self.params enthält die zu verwendenden Parameter.
 
+        self._log("Setting up LLM and agent")
         if "OPENAI_API_KEY" not in os.environ or not os.environ["OPENAI_API_KEY"]:
             if self.llm is not None or self.agent is not None: # Nur zurücksetzen, wenn sie vorher existierten
                 self.llm = None
@@ -161,6 +185,7 @@ class ChatApp:
             # Wir erstellen das LLM-Objekt hier immer neu, wenn die Methode aufgerufen wird
             # und ein API-Key vorhanden ist. Das vereinfacht die Logik und vermeidet Attributfehler.
 
+            self._log(f"Initializing ChatOpenAI with model {current_model}")
             self.llm = ChatOpenAI(
                 streaming=True,
                 model=current_model,
@@ -169,10 +194,12 @@ class ChatApp:
                 top_p=current_top_p,
                 model_kwargs={} # Sicherstellen, dass keine doppelten Parameter übergeben werden
             )
-            self._setup_agent() # Agent muss nach LLM neu initialisiert werden
+            self._setup_agent()  # Agent muss nach LLM neu initialisiert werden
             st.session_state["llm_initialized_with_key"] = True
+            self._log("LLM and agent initialized")
 
         except Exception as exc:
+            self._log(f"Failed to initialize model: {exc}", level=logging.ERROR)
             st.error(f"Failed to initialize model: {exc}")
             self.llm = None
             self.agent = None
@@ -181,6 +208,7 @@ class ChatApp:
 
     def _setup_agent(self) -> None:
         """Initialize a simple agent with Python REPL capabilities."""
+        self._log("Initializing agent")
         if not self.llm:
             self.agent = None
             return
@@ -205,12 +233,15 @@ class ChatApp:
                 verbose=False,
                 handle_parsing_errors=True
             )
+            self._log("Agent initialized")
         except Exception as exc:
+            self._log(f"Failed to initialize agent: {exc}", level=logging.ERROR)
             st.error(f"Failed to initialize agent: {exc}")
             self.agent = None
 
 
     def _stream_response(self, messages_history: list):
+        self._log("Streaming response from LLM")
         if not self.llm:
             yield "LLM ist nicht initialisiert. Bitte API Key im Sidebar eingeben und Parameter prüfen."
             return
@@ -228,6 +259,7 @@ class ChatApp:
                 if text:
                     yield text
         except Exception as e:
+            self._log(f"Error while streaming response: {e}", level=logging.ERROR)
             yield f"Ein Fehler ist beim Streamen der Antwort aufgetreten: {e}"
 
 
@@ -250,6 +282,7 @@ class ChatApp:
 
     def _display_messages(self) -> None:
         current_chat_id = st.session_state.get("current_chat", "default")
+        self._log(f"Displaying messages for chat: {current_chat_id}")
         # Sicherstellen, dass der Chat-Eintrag existiert
         if current_chat_id not in st.session_state["chats"]:
             st.session_state["chats"][current_chat_id] = []
@@ -261,6 +294,7 @@ class ChatApp:
 
 
     def _start_agent_task(self, task: str) -> None:
+        self._log(f"Starting agent task: {task}")
         if not self.agent:
             st.error("Agent ist nicht initialisiert. Agentic Mode nicht möglich.")
             return
@@ -270,12 +304,15 @@ class ChatApp:
             try:
                 result = self.agent.run(task)
             except Exception as exc:
+                self._log(f"Agent task failed: {exc}", level=logging.ERROR)
                 result = f"Agent failed: {exc}"
 
         st.session_state["agent_result"] = result
+        self._log("Agent task completed")
 
 
     def _display_agentic(self) -> None:
+        self._log("Displaying agentic controls")
         if not self.agent:
             # Die Warnung über PythonREPLTool wird in _setup_agent behandelt, falls der Import fehlschlägt.
             # Hier eine allgemeinere Warnung, falls der Agent aus anderen Gründen nicht da ist.
@@ -285,6 +322,7 @@ class ChatApp:
 
         task = st.text_input("Agent Task", key="agent_task_input")
         if st.button("Run Agent", key="run_agent_button") and task:
+            self._log("Run Agent button pressed")
             self._start_agent_task(task)
 
         if st.session_state.get("agent_result") is not None:
@@ -292,6 +330,7 @@ class ChatApp:
 
 
     def run(self) -> None:
+        self._log("Running main app loop")
         st.title("KiSo - Chat")
         st.divider()
 
@@ -325,6 +364,7 @@ class ChatApp:
             prompt = st.chat_input("Ask your question!", key=f"chat_input_{current_chat_id}")
             if prompt:
                 messages.append({"role": "user", "content": prompt})
+                self._log(f"User prompt received: {prompt}")
                 with st.chat_message("user"):
                     st.markdown(prompt)
 
@@ -337,17 +377,23 @@ class ChatApp:
                         for chunk in response_stream:
                             full_response_content.append(chunk)
                             full_response_placeholder.markdown("".join(full_response_content))
-                        
+
                         final_response = "".join(full_response_content)
                         if not final_response and not any("Fehler" in str(chunk) for chunk in full_response_content):
                             final_response = "Keine Antwort erhalten." # Fallback, falls Stream leer ist
                             st.warning(final_response)
                     except Exception as e:
+                        self._log(f"Error while generating response: {e}", level=logging.ERROR)
                         st.error(f"Ein Fehler ist beim Anzeigen der Antwort aufgetreten: {e}")
                         final_response = f"Fehler beim Verarbeiten der Antwort: {e}"
 
                 messages.append({"role": "assistant", "content": final_response})
+                self._log("Assistant response stored")
                 st.rerun()
+
+        if st.session_state.get("debug_logs"):
+            with st.expander("Debug Logs"):
+                st.code("\n".join(st.session_state["debug_logs"]))
 
 
 if __name__ == "__main__":
