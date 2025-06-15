@@ -11,9 +11,6 @@ A Streamlit chat application powered by OpenAI's APIs and LangChain.
 - Streaming of assistant responses.
 - Agentic mode for autonomous background tasks.
 - Summarize chats into bullet points with a single click.
-- Optional message optimization (MCO) to refine user prompts.
-- Optional MCP tool for cleaning and polishing messages.
-
 ## Setup and Installation
 
 1.  **Clone the repository:**

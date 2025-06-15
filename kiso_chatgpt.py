@@ -27,8 +27,6 @@ except ImportError:
 from langchain.agents import Tool, initialize_agent # initialize_agent ist veraltet, aber vorerst beibehalten
 from langchain_core.messages import HumanMessage, AIMessage
 
-from mco import apply_mco
-from mcp import apply_mcp, get_mcp_tool
 
 
 class ChatApp:
@@ -61,10 +59,6 @@ class ChatApp:
             st.session_state["llm_initialized_with_key"] = False
         if "openai_api_key_value" not in st.session_state: # Für Persistenz des API-Key Feldes
             st.session_state["openai_api_key_value"] = os.environ.get("OPENAI_API_KEY", "")
-        if "mco_enabled" not in st.session_state:
-            st.session_state["mco_enabled"] = False
-        if "mcp_enabled" not in st.session_state:
-            st.session_state["mcp_enabled"] = False
 
 
     def _setup_sidebar(self) -> None:
@@ -104,16 +98,10 @@ class ChatApp:
             max_tokens = st.number_input("Max tokens", min_value=1, max_value=4096, value=250, key="max_tokens_input")
             top_p = st.slider("Top P", 0.0, 1.0, 1.0, 0.05, key="top_p_slider")
 
-            st.session_state["agentic_mode"] = st.checkbox("Agentic Mode", value=st.session_state.get("agentic_mode", False), key="agentic_mode_checkbox")
-            st.session_state["mco_enabled"] = st.checkbox(
-                "Enable MCO (optimize messages)",
-                value=st.session_state.get("mco_enabled", False),
-                key="mco_enabled_checkbox",
-            )
-            st.session_state["mcp_enabled"] = st.checkbox(
-                "Enable MCP tool (clean messages)",
-                value=st.session_state.get("mcp_enabled", False),
-                key="mcp_enabled_checkbox",
+            st.session_state["agentic_mode"] = st.checkbox(
+                "Agentic Mode",
+                value=st.session_state.get("agentic_mode", False),
+                key="agentic_mode_checkbox",
             )
 
             if st.button("New Chat :page_facing_up:", key="new_chat_button"):
@@ -216,8 +204,6 @@ class ChatApp:
                 description="Execute Python code and return the result. Useful for calculations or code execution."
             )
             tools = [tool]
-            if st.session_state.get("mcp_enabled"):
-                tools.append(get_mcp_tool(self.llm))
             self.agent = initialize_agent(
                 tools,
                 self.llm,
@@ -344,18 +330,11 @@ class ChatApp:
         if self.llm and st.session_state.get("llm_initialized_with_key", False):
             prompt = st.chat_input("Ask your question!", key=f"chat_input_{current_chat_id}")
             if prompt:
-                optimized_prompt = prompt
-                if st.session_state.get("mco_enabled"):
-                    optimized_prompt = apply_mco(self.llm, prompt)
-                final_prompt = optimized_prompt
-                if st.session_state.get("mcp_enabled"):
-                    final_prompt = apply_mcp(self.llm, optimized_prompt)
+                final_prompt = prompt
 
                 messages.append({"role": "user", "content": final_prompt})
                 with st.chat_message("user"):
                     st.markdown(final_prompt)
-                    if final_prompt != prompt:
-                        st.caption(f"Optimized from: {prompt}")
 
                 with st.chat_message("assistant"):
                     full_response_content = []
