@@ -28,6 +28,7 @@ from langchain.agents import Tool, initialize_agent # initialize_agent ist veral
 from langchain_core.messages import HumanMessage, AIMessage
 
 from mco import apply_mco
+from mcp import apply_mcp, get_mcp_tool
 
 
 class ChatApp:
@@ -62,6 +63,8 @@ class ChatApp:
             st.session_state["openai_api_key_value"] = os.environ.get("OPENAI_API_KEY", "")
         if "mco_enabled" not in st.session_state:
             st.session_state["mco_enabled"] = False
+        if "mcp_enabled" not in st.session_state:
+            st.session_state["mcp_enabled"] = False
 
 
     def _setup_sidebar(self) -> None:
@@ -106,6 +109,11 @@ class ChatApp:
                 "Enable MCO (optimize messages)",
                 value=st.session_state.get("mco_enabled", False),
                 key="mco_enabled_checkbox",
+            )
+            st.session_state["mcp_enabled"] = st.checkbox(
+                "Enable MCP tool (clean messages)",
+                value=st.session_state.get("mcp_enabled", False),
+                key="mcp_enabled_checkbox",
             )
 
             if st.button("New Chat :page_facing_up:", key="new_chat_button"):
@@ -207,8 +215,11 @@ class ChatApp:
                 func=python_repl_tool_instance.run,
                 description="Execute Python code and return the result. Useful for calculations or code execution."
             )
+            tools = [tool]
+            if st.session_state.get("mcp_enabled"):
+                tools.append(get_mcp_tool(self.llm))
             self.agent = initialize_agent(
-                [tool],
+                tools,
                 self.llm,
                 agent="zero-shot-react-description",
                 verbose=False,
@@ -336,11 +347,14 @@ class ChatApp:
                 optimized_prompt = prompt
                 if st.session_state.get("mco_enabled"):
                     optimized_prompt = apply_mco(self.llm, prompt)
+                final_prompt = optimized_prompt
+                if st.session_state.get("mcp_enabled"):
+                    final_prompt = apply_mcp(self.llm, optimized_prompt)
 
-                messages.append({"role": "user", "content": optimized_prompt})
+                messages.append({"role": "user", "content": final_prompt})
                 with st.chat_message("user"):
-                    st.markdown(optimized_prompt)
-                    if optimized_prompt != prompt:
+                    st.markdown(final_prompt)
+                    if final_prompt != prompt:
                         st.caption(f"Optimized from: {prompt}")
 
                 with st.chat_message("assistant"):
